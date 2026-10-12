@@ -156,7 +156,7 @@ Relative paths resolve under `backend/`; absolute paths also work. To return to 
 
 ## CSV uploads for review
 
-In **Offerings → Upload for review**, select a `.csv` or `.tsv` file. Choose **Auto-detect**, **Comma**, **Semicolon**, or **Tab**, and specify whether the **first row contains headers**. Click **Preview CSV**; if detection is wrong, select an explicit separator and preview again. Changing parsing settings invalidates the old preview.
+In **Offerings**, the upload area is visible by default. Click the prominent **Choose CSV file** area or drag and drop one `.csv` or `.tsv` file onto it. Multiple files are rejected explicitly; picker and drop use the same validation. Choose **Auto-detect**, **Comma**, **Semicolon**, or **Tab**, and specify whether the **first row contains headers**. Selecting or dropping a file automatically prepares its preview. If detection is wrong, change the separator or header checkbox; the preview refreshes automatically. A failed preview keeps the source available for **Retry preview**. **Clear file** resets the selection without hiding the upload area. Only **Save upload for review** persists the source.
 
 Columns can have any labels, including duplicate or empty labels. No `name,description` mapping is required. For example:
 
@@ -168,6 +168,7 @@ S-002,Workspace setup,120,150,Service
 
 - UTF-8 with or without BOM is supported. Unsupported encoding is rejected with instructions to re-export as UTF-8, never decoded with replacement characters.
 - Quoted delimiters and newlines are supported. Whitespace, original labels, blank rows, empty cells, and variable-width rows are retained; rows are lists, never dictionaries keyed by header names.
+- Preview rows are paginated by default: 10 per page in compact view. **Expand preview** shows 25 rows per page in a taller table; **Collapse preview** restores compact view. These controls do not fetch beyond the configured preview limit. Row controls stay visible even for a single page.
 - Wide previews show 25 columns per page with Previous/Next controls; all original columns remain stored. Column numbers and empty/missing-cell hints are display aids only. Source values are never rewritten. Cells are rendered as plain text, including HTML-like text and formulas.
 - Empty/all-whitespace sources and malformed CSV produce actionable errors. The entire file is validated, including rows beyond the preview.
 - Defaults: **1 MiB (1,048,576 bytes)** per source and **50 preview data rows**. Configure `OUTREACH_UPLOAD_MAX_BYTES` (1–67,108,864 bytes) and `OUTREACH_UPLOAD_PREVIEW_ROWS` (1–1,000 rows) in the backend shell before startup; invalid settings fail startup with the variable name. Preview truncation never truncates the stored source. There is no old 1,000-offering import limit.

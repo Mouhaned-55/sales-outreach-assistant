@@ -10,15 +10,14 @@ import {
 import { EmptyState, Icon, Notice } from "./components";
 import { CatalogPreview, delimiterLabel } from "./CatalogPreview";
 import { encodeUploadFile, type UploadSource } from "./uploadFile";
+import { FileDropZone } from "./FileDropZone";
 
 type Props = {
-  open: boolean;
-  onOpenChange: (value: boolean) => void;
   busy: boolean;
   setBusy: (value: boolean) => void;
 };
 
-export function CatalogUploads({ open, onOpenChange, busy, setBusy }: Props) {
+export function CatalogUploads({ busy, setBusy }: Props) {
   const [settings, setSettings] = useState<UploadSettings | null>(null);
   const [uploads, setUploads] = useState<StagedUpload[]>([]);
   const [source, setSource] = useState<UploadSource | null>(null);
@@ -68,12 +67,6 @@ export function CatalogUploads({ open, onOpenChange, busy, setBusy }: Props) {
     setBusy(false);
     setOperation("");
   }
-  function invalidatePreview() {
-    setPreview(null);
-    setError("");
-    setSuccess("");
-  }
-
   async function chooseFile(file?: File) {
     setSource(null);
     setPreview(null);
@@ -82,7 +75,10 @@ export function CatalogUploads({ open, onOpenChange, busy, setBusy }: Props) {
     if (!file || !settings) return;
     begin("Reading file…");
     try {
-      setSource(await encodeUploadFile(file, settings.max_file_bytes));
+      const nextSource = await encodeUploadFile(file, settings.max_file_bytes);
+      setSource(nextSource);
+      setOperation("Preparing preview…");
+      setPreview(await readPreview(nextSource, delimiter, hasHeaders));
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -90,18 +86,27 @@ export function CatalogUploads({ open, onOpenChange, busy, setBusy }: Props) {
     }
   }
 
-  async function buildPreview() {
+  function readPreview(
+    nextSource: UploadSource,
+    nextDelimiter: Delimiter,
+    nextHasHeaders: boolean,
+  ) {
+    return request<UploadPreview>("/uploads/preview", "POST", {
+      ...nextSource,
+      delimiter: nextDelimiter,
+      has_headers: nextHasHeaders,
+    });
+  }
+
+  async function buildPreview(
+    nextDelimiter = delimiter,
+    nextHasHeaders = hasHeaders,
+  ) {
     if (!source || busy) return;
-    begin("Checking the complete file and preparing a preview…");
+    begin("Updating preview…");
     setPreview(null);
     try {
-      setPreview(
-        await request<UploadPreview>("/uploads/preview", "POST", {
-          ...source,
-          delimiter,
-          has_headers: hasHeaders,
-        }),
-      );
+      setPreview(await readPreview(source, nextDelimiter, nextHasHeaders));
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -122,7 +127,6 @@ export function CatalogUploads({ open, onOpenChange, busy, setBusy }: Props) {
       setSelected(saved);
       setSource(null);
       setPreview(null);
-      onOpenChange(false);
       setSuccess("Upload saved — awaiting review. No offerings were created.");
     } catch (err) {
       setError((err as Error).message);
@@ -189,126 +193,144 @@ export function CatalogUploads({ open, onOpenChange, busy, setBusy }: Props) {
           {operation}
         </p>
       )}
-      {open && (
-        <section className="panel import-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Upload for review</h2>
-              <p>Save your catalog source without changing your offerings.</p>
-            </div>
-            <Icon name="upload" />
-          </div>
-          <p className="upload-explanation">
-            CSV files may have any column names, duplicate or empty labels, or
-            no header row. AI review and mapping are planned, not implemented.
-          </p>
-          <div className="import-instructions">
+      <section className="panel import-panel">
+        <div className="panel-heading">
+          <div>
+            <h2>Upload for review</h2>
             <p>
-              UTF-8 CSV only, with comma, semicolon, or tab separators. Excel
-              and PDF are not supported.
-              {settings && (
-                <>
-                  {" "}
-                  Limit: {settings.max_file_bytes.toLocaleString()} bytes per
-                  file; preview up to {settings.preview_row_limit} data rows.
-                </>
-              )}
+              Choose or drop a file to preview it automatically. Save when
+              you’re ready.
             </p>
-            <a href="/api/offerings/example.csv" download="catalog-example.csv">
-              Download example CSV ↗
-            </a>
           </div>
-          <fieldset disabled={busy || loading || !settings || !!loadError}>
-            <label className="file-label" htmlFor="catalog-file">
-              Choose a CSV file
-            </label>
-            <input
-              id="catalog-file"
-              className="file-input"
-              type="file"
-              accept=".csv,.tsv,text/csv,text/tab-separated-values"
-              onChange={(event) => {
-                void chooseFile(event.target.files?.[0]);
-                event.target.value = "";
-              }}
-            />
-            {source && (
-              <p className="selected-filename">
-                Selected: <strong>{source.filename}</strong>
-              </p>
+          <Icon name="upload" />
+        </div>
+        <p className="upload-explanation">
+          CSV files may have any column names, duplicate or empty labels, or no
+          header row. AI review and mapping are planned, not implemented.
+        </p>
+        <div className="import-instructions">
+          <p>
+            UTF-8 CSV only, with comma, semicolon, or tab separators. Excel and
+            PDF are not supported.
+            {settings && (
+              <>
+                {" "}
+                Limit: {settings.max_file_bytes.toLocaleString()} bytes per
+                file; preview up to {settings.preview_row_limit} data rows.
+              </>
             )}
-            <div className="upload-options">
-              <div className="field">
-                <label htmlFor="catalog-delimiter">Column separator</label>
-                <select
-                  id="catalog-delimiter"
-                  value={delimiter}
-                  onChange={(event) => {
-                    setDelimiter(event.target.value as Delimiter);
-                    invalidatePreview();
-                  }}
-                >
-                  <option value="auto">Auto-detect</option>
-                  <option value=",">Comma (,)</option>
-                  <option value=";">Semicolon (;)</option>
-                  <option value={"\t"}>Tab</option>
-                </select>
-              </div>
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={hasHeaders}
-                  onChange={(event) => {
-                    setHasHeaders(event.target.checked);
-                    invalidatePreview();
-                  }}
-                />
-                First row contains headers
-              </label>
-            </div>
-            <p className="preview-caption">
-              If columns look wrong or detection fails, choose a separator and
-              preview again. Uncheck headers to keep the first row as data.
+          </p>
+          <a href="/api/offerings/example.csv" download="catalog-example.csv">
+            Download example CSV ↗
+          </a>
+        </div>
+        <fieldset disabled={busy || loading || !settings || !!loadError}>
+          <label className="file-label" htmlFor="catalog-file">
+            Choose a CSV file
+          </label>
+          <FileDropZone
+            disabled={busy || loading || !settings || !!loadError}
+            filename={source?.filename}
+            onFile={chooseFile}
+            onError={(message) => {
+              setSource(null);
+              setPreview(null);
+              setSuccess("");
+              setError(message);
+            }}
+          />
+          {source && (
+            <p className="selected-filename" role="status">
+              Selected: <strong>{source.filename}</strong>.{" "}
+              {preview ? (
+                <>
+                  Review the preview below, then click{" "}
+                  <strong>Save upload for review</strong>.
+                </>
+              ) : (
+                <>
+                  {busy
+                    ? "Preparing your preview…"
+                    : "Preview unavailable. Check the error and parsing settings, then retry."}
+                </>
+              )}{" "}
+              Nothing has been saved yet.
             </p>
-            <div className="button-group">
-              <button
-                className="button secondary"
-                disabled={!source}
-                onClick={() => void buildPreview()}
-              >
-                Preview CSV
-              </button>
-              <button
-                className="text-button"
-                onClick={() => {
-                  onOpenChange(false);
-                  setSource(null);
-                  setPreview(null);
+          )}
+          <div className="upload-options">
+            <div className="field">
+              <label htmlFor="catalog-delimiter">Column separator</label>
+              <select
+                id="catalog-delimiter"
+                value={delimiter}
+                onChange={(event) => {
+                  const value = event.target.value as Delimiter;
+                  setDelimiter(value);
+                  void buildPreview(value, hasHeaders);
                 }}
               >
-                Cancel upload
-              </button>
+                <option value="auto">Auto-detect</option>
+                <option value=",">Comma (,)</option>
+                <option value=";">Semicolon (;)</option>
+                <option value={"\t"}>Tab</option>
+              </select>
             </div>
-          </fieldset>
-          {preview && (
-            <>
-              <CatalogPreview preview={preview} />
-              <div className="button-group">
-                <button
-                  className="button"
-                  disabled={busy}
-                  onClick={() => void stage()}
-                >
-                  Save upload for review
-                </button>
-                <span className="preview-caption">
-                  Saves the complete source. Does not add to the offering count.
-                </span>
-              </div>
-            </>
-          )}
-        </section>
-      )}
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={hasHeaders}
+                onChange={(event) => {
+                  const value = event.target.checked;
+                  setHasHeaders(value);
+                  void buildPreview(delimiter, value);
+                }}
+              />
+              First row contains headers
+            </label>
+          </div>
+          <p className="preview-caption">
+            The preview updates automatically when you change these settings. If
+            columns look wrong, choose a separator. Uncheck headers to keep the
+            first row as data.
+          </p>
+          <div className="button-group">
+            {source && !preview && !busy && error && (
+              <button className="button" onClick={() => void buildPreview()}>
+                Retry preview
+              </button>
+            )}
+            <button
+              className="text-button"
+              onClick={() => {
+                setSource(null);
+                setPreview(null);
+                setError("");
+                setSuccess("");
+              }}
+              disabled={!source && !error}
+            >
+              Clear file
+            </button>
+          </div>
+        </fieldset>
+        {preview && (
+          <>
+            <CatalogPreview preview={preview} />
+            <div className="button-group">
+              <button
+                className="button"
+                disabled={busy}
+                onClick={() => void stage()}
+              >
+                Save upload for review
+              </button>
+              <span className="preview-caption">
+                Saves the complete source. Does not add to the offering count.
+              </span>
+            </div>
+          </>
+        )}
+      </section>
 
       <section className="panel staged-list">
         <div className="panel-heading padded">
@@ -334,8 +356,8 @@ export function CatalogUploads({ open, onOpenChange, busy, setBusy }: Props) {
           </p>
         ) : uploads.length === 0 ? (
           <EmptyState icon="upload" title="Keep your catalog ready for review">
-            Choose Upload for review to preview and save a CSV. Add offerings
-            manually to use them in your catalog today.
+            Choose or drop a CSV above to preview it automatically. Add
+            offerings manually to use them in your catalog today.
           </EmptyState>
         ) : (
           <div className="table-scroll">

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { UploadPreview } from "./api";
+import { previewPage } from "./uploadView";
 
 const COLUMNS_PER_PAGE = 25;
 
@@ -21,9 +22,14 @@ export function CatalogPreview({
   saved?: boolean;
 }) {
   const [columnPage, setColumnPage] = useState(0);
+  const [rowPage, setRowPage] = useState(0);
+  const [expanded, setExpanded] = useState(false);
   useEffect(() => {
     setColumnPage(0);
+    setRowPage(0);
+    setExpanded(false);
   }, [preview]);
+  const rowWindow = previewPage(preview.rows.length, rowPage, expanded);
   const lastPage = Math.max(
     0,
     Math.ceil(preview.column_count / COLUMNS_PER_PAGE) - 1,
@@ -41,7 +47,7 @@ export function CatalogPreview({
     (_, index) => startColumn + index,
   );
   return (
-    <div className="preview">
+    <div className={`preview ${expanded ? "preview-expanded" : ""}`}>
       <div className="preview-heading">
         <h3>
           {preview.row_count} data rows · {preview.column_count} columns
@@ -51,6 +57,45 @@ export function CatalogPreview({
           {preview.has_headers ? "First row is headers" : "No header row"}
         </span>
       </div>
+      <div className="preview-controls">
+        <nav className="button-group" aria-label="Preview rows">
+          <button
+            className="button secondary"
+            disabled={rowWindow.page === 0}
+            onClick={() => setRowPage(rowWindow.page - 1)}
+          >
+            Previous rows
+          </button>
+          <span className="preview-caption" role="status">
+            Page {rowWindow.page + 1} of {rowWindow.pages} · Rows{" "}
+            {preview.rows.length ? rowWindow.start + 1 : 0}–{rowWindow.end} of{" "}
+            {preview.rows.length} previewed
+          </span>
+          <button
+            className="button secondary"
+            disabled={rowWindow.page === rowWindow.pages - 1}
+            onClick={() => setRowPage(rowWindow.page + 1)}
+          >
+            Next rows
+          </button>
+        </nav>
+        <button
+          className="button secondary"
+          aria-expanded={expanded}
+          onClick={() => {
+            setExpanded(!expanded);
+            setRowPage(0);
+          }}
+        >
+          {expanded ? "Collapse preview" : "Expand preview"}
+        </button>
+      </div>
+      <p className="preview-caption">
+        {expanded
+          ? "Expanded view · 25 rows per page"
+          : "Compact view · 10 rows per page"}
+        . Expanding does not load rows beyond the configured preview limit.
+      </p>
       {preview.warnings.length > 0 && (
         <div className="notice warning" role="status">
           <ul>
@@ -124,22 +169,26 @@ export function CatalogPreview({
             </tr>
           </thead>
           <tbody>
-            {preview.rows.map((row, rowIndex) => (
-              <tr key={rowIndex}>
-                <th scope="row">{rowIndex + 1}</th>
-                {columns.map((columnIndex) => (
-                  <td key={columnIndex}>
-                    {columnIndex >= row.length ? (
-                      <span className="cell-placeholder">No cell</span>
-                    ) : row[columnIndex] === "" ? (
-                      <span className="cell-placeholder">Empty value</span>
-                    ) : (
-                      <span className="original-cell">{row[columnIndex]}</span>
-                    )}
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {preview.rows
+              .slice(rowWindow.start, rowWindow.end)
+              .map((row, rowIndex) => (
+                <tr key={rowWindow.start + rowIndex}>
+                  <th scope="row">{rowWindow.start + rowIndex + 1}</th>
+                  {columns.map((columnIndex) => (
+                    <td key={columnIndex}>
+                      {columnIndex >= row.length ? (
+                        <span className="cell-placeholder">No cell</span>
+                      ) : row[columnIndex] === "" ? (
+                        <span className="cell-placeholder">Empty value</span>
+                      ) : (
+                        <span className="original-cell">
+                          {row[columnIndex]}
+                        </span>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>

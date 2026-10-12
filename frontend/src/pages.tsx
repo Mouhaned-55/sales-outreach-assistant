@@ -121,14 +121,12 @@ export function OfferingsPage({
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [showUpload, setShowUpload] = useState(false);
   function edit(item: Offering | "new") {
     setEditing(item);
     setName(item === "new" ? "" : item.name);
     setDescription(item === "new" ? "" : item.description);
     setError("");
     setSuccess("");
-    setShowUpload(false);
   }
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -184,19 +182,6 @@ export function OfferingsPage({
         </div>
         <div className="button-group">
           <button
-            className="button secondary"
-            disabled={busy}
-            onClick={() => {
-              setShowUpload(true);
-              setEditing(null);
-              setError("");
-              setSuccess("");
-            }}
-          >
-            <Icon name="upload" size={17} />
-            Upload for review
-          </button>
-          <button
             className="button"
             disabled={busy}
             onClick={() => edit("new")}
@@ -207,12 +192,6 @@ export function OfferingsPage({
         </div>
       </div>
       <Notice error={error} success={success} />
-      <CatalogUploads
-        open={showUpload}
-        onOpenChange={setShowUpload}
-        busy={busy}
-        setBusy={setBusy}
-      />
       {editing && (
         <section className="panel form-panel inline-form">
           <h2>{editing === "new" ? "Add an offering" : "Edit offering"}</h2>
@@ -248,6 +227,7 @@ export function OfferingsPage({
           </form>
         </section>
       )}
+      <CatalogUploads busy={busy} setBusy={setBusy} />
       <section className="panel">
         <div className="panel-heading padded">
           <div>
